@@ -11,6 +11,46 @@ a remote desktop over Guacamole is very often the encoder, not the network.
 
 Upstream's own documentation is unchanged and still lives in [`README`](README).
 
+## Installing
+
+There is a prebuilt image, so nothing needs compiling.
+
+**If you already run Guacamole with Docker Compose**, one command points it at
+this guacd. It finds your `docker-compose.yml`, backs it up, changes the one
+line, and restarts only that service — checking it came back up, and putting
+your previous image back if it did not:
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/aaldersondev/guacamole-server/faster-display/install.sh | bash
+```
+
+Add `--check` first if you would rather see what it intends to do, and
+`--revert` at any point to go back. Nothing else in your stack is touched.
+
+**If you are starting from nothing**, the same script sets up a complete
+Guacamole — database, guacd and web application — in a directory of your
+choosing:
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/aaldersondev/guacamole-server/faster-display/install.sh -o install.sh
+bash install.sh --new ~/guacamole
+```
+
+**Or change the one line yourself.** That is all the script really does:
+
+```yaml
+  guacd:
+    image: ghcr.io/aaldersondev/guacd:1.6.0-fast    # was guacamole/guacd:1.6.0
+```
+
+Then `docker compose up -d guacd`. Configuration, connections and the web
+application are unaffected: this replaces guacd and nothing else, and going
+back is the same line in reverse.
+
+The image is `linux/amd64`. On another architecture, build it yourself with
+`docker build -t ghcr.io/aaldersondev/guacd:1.6.0-fast .` and the script will
+use what it finds locally.
+
 ## Why
 
 On a 1600x900 VNC session over a 100 Mb/s link, measuring a worst case of
@@ -152,7 +192,8 @@ alone — no network, no remote desktop server. Passing `--image` makes it use a
 real screenshot as source imagery; without it, it synthesizes a desktop-like
 image. See [`bench/README.md`](bench/README.md) for the details.
 
-A `guacd` container image can be built as usual:
+A `guacd` container image can be built as usual, and this is what the
+published image is built from:
 
 ```sh
 docker build -t guacd:1.6.0-fast .
@@ -167,7 +208,8 @@ FreeRDP 2.x tag is a development snapshot that `configure` refuses.
 ## Licensing and attribution
 
 Apache License 2.0, unchanged from upstream. This fork modifies the following
-files relative to Apache Guacamole 1.6.0, and adds `bench/` and this README:
+files relative to Apache Guacamole 1.6.0, and adds `bench/`, `install.sh`, a
+publishing workflow and this README:
 
 ```
 src/libguac/display-flush.c
