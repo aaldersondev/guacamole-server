@@ -30,11 +30,11 @@ make -C bench
 
 ```
 scenario       frames   wall(ms)    cpu(ms)   ms/frame  cpu/frame
-typing            200       46.2       44.7      0.231      0.223
-scroll            200     3476.7     4701.7     17.383     23.509
-window            200      751.6     1238.7      3.758      6.193
-video             200      624.5      973.6      3.122      4.868
-fullscreen        200     3594.9     5093.6     17.974     25.468
+typing            200       58.4       59.0      0.292      0.295
+scroll            200     4176.0     6976.0     20.880     34.880
+window            200     1042.8     2064.2      5.214     10.321
+video             200      835.2     1672.0      4.176      8.360
+fullscreen        200     4392.2     7937.4     21.961     39.687
 ```
 
 `wall` is elapsed time; `cpu` is total processor time across all threads, and
@@ -70,6 +70,11 @@ Capture one from the machine you care about:
 import -window root desktop.png     # ImageMagick, under X11
 ```
 
+Check what you captured. A lock screen or a bare wallpaper is a smooth gradient
+with almost no text, and benchmarking against one measures something quite
+different from a desktop: it inflates the apparent gain of anything that
+touches the fixed per-frame cost and understates everything else.
+
 ## Comparing two builds
 
 The interesting question about an optimization is usually not only whether it
@@ -98,8 +103,10 @@ away before comparing:
 sed -E 's/4\.sync,[0-9]+\.[0-9]+,/4.sync,TS,/g' a.fullscreen > a.norm
 ```
 
-Note that upstream 1.6.0 is not itself deterministic for every scenario:
-repeated runs of the same binary produce different streams for `typing`,
-`scroll`, `window` and `video`, because the encoder choice depends on timing
-that `--pace` only partly constrains. `fullscreen` is deterministic, which
-makes it the scenario worth comparing byte for byte.
+Note that upstream 1.6.0 is not itself deterministic for every scenario. With a
+real desktop screenshot as source imagery, `scroll`, `window` and `fullscreen`
+repeat exactly and are worth comparing byte for byte; `typing` and `video` do
+not, because the encoder choice depends on timing that `--pace` only partly
+constrains. Which scenarios fall on which side depends on the source image, so
+check that a scenario repeats for the *unmodified* build before drawing any
+conclusion from a difference.
