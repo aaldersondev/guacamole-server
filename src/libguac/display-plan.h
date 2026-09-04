@@ -284,6 +284,19 @@ typedef struct guac_display_plan {
      */
     guac_display_plan_indexed_operation ops_by_hash[GUAC_DISPLAY_PLAN_OPERATION_INDEX_SIZE];
 
+    /**
+     * Bitmap describing which buckets of ops_by_hash are currently occupied,
+     * where bit N corresponds to ops_by_hash[N].
+     *
+     * The search for reusable image data probes ops_by_hash once per pixel of
+     * the changed region, and nearly every one of those probes misses: only a
+     * few hundred of the 65536 buckets are ever occupied. Because ops_by_hash
+     * is a megabyte in size, each of those probes is a cache miss. This bitmap
+     * is small enough to stay resident in cache, and answers the miss without
+     * touching ops_by_hash at all.
+     */
+    uint32_t ops_by_hash_occupied[GUAC_DISPLAY_PLAN_OPERATION_INDEX_SIZE / 32];
+
 } guac_display_plan;
 
 /**
