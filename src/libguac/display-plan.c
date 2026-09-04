@@ -104,34 +104,30 @@ static void guac_display_plan_mark_dirty(guac_display_layer* layer,
 static size_t guac_display_memcmp(const uint32_t* restrict buffer_a,
         const uint32_t* restrict buffer_b, size_t count, size_t* pos) {
 
-    /* Locate first difference between the buffers, if any */
-    size_t first = 0;
-    while (first < count) {
-
-        if (*(buffer_a++) != *(buffer_b++))
-            break;
-
-        first++;
-
-    }
-
-    /* If we reached the end without finding any differences, no need to search
-     * further - the buffers are identical */
-    if (first >= count)
+    if (count == 0)
         return 0;
 
-    /* Search through all remaining values in the buffers for the last
-     * difference (which may be identical to the first) */
-    size_t last = first;
-    size_t offset = first + 1;
-    while (offset < count) {
+    /* By far the most common outcome is that nothing within this run of pixels
+     * has changed at all, and this function is called for every 64-pixel run
+     * of every dirty cell of every frame. Answer that case with memcmp(),
+     * which the C library implements using vector instructions, rather than
+     * walking the buffers one pixel at a time. */
+    if (!memcmp(buffer_a, buffer_b, count * sizeof(uint32_t)))
+        return 0;
 
-        if (*(buffer_a++) != *(buffer_b++))
-            last = offset;
+    /* At least one difference is known to exist at this point, so both of the
+     * following scans are guaranteed to terminate within the buffers */
 
-        offset++;
+    /* Locate the first difference between the buffers */
+    size_t first = 0;
+    while (buffer_a[first] == buffer_b[first])
+        first++;
 
-    }
+    /* Locate the last difference, searching backwards so that a short run of
+     * changed pixels does not require scanning everything that follows it */
+    size_t last = count - 1;
+    while (buffer_a[last] == buffer_b[last])
+        last--;
 
     /* Final difference found - provide caller with the starting offset and
      * length (in 32-bit quantities) of differences */
