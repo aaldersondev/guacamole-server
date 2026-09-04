@@ -50,11 +50,17 @@ ARG PREFIX_DIR=/opt/guacamole
 # library (these can be overridden at build time if a specific version is
 # needed)
 #
-ARG WITH_FREERDP="${FREERDP_VERSION}(\.\d+)+"
+# NOTE: Pinned to a specific release rather than tracking the newest tag
+# matching "${FREERDP_VERSION}(\.\d+)+", as the newest such tag is a development
+# snapshot and guacamole-server's configure refuses to build against one.
+# Changing FREERDP_VERSION therefore also requires changing this.
+ARG WITH_FREERDP='2\.11\.7'
 ARG WITH_LIBSSH2='libssh2-\d+(\.\d+)+'
 ARG WITH_LIBTELNET='\d+(\.\d+)+'
 ARG WITH_LIBVNCCLIENT='LibVNCServer-\d+(\.\d+)+'
-ARG WITH_LIBWEBSOCKETS='v\d+(\.\d+)+'
+# NOTE: Pinned rather than tracking the newest matching tag. Newer releases
+# require GnuTLS, which is not present in the Alpine base image used here.
+ARG WITH_LIBWEBSOCKETS='v4\.3(\.\d+)+'
 
 #
 # Default build options for each core protocol support library, as well as
