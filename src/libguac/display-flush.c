@@ -161,14 +161,34 @@ static int PFW_LFW_guac_display_frame_complete(guac_display* display) {
          * inherently part of that) */
         else if (!guac_rect_is_empty(&current->pending_frame.dirty)) {
 
-            unsigned char* pending_frame = current->pending_frame.buffer;
-            unsigned char* last_frame = current->last_frame.buffer;
-            size_t row_length = guac_mem_ckd_mul_or_die(current->pending_frame.width, 4);
+            /* Only the dirty region of the pending frame can possibly differ
+             * from the last frame: every write to a layer buffer is required
+             * to be accompanied by a corresponding update of that layer's
+             * dirty rect, and guac_display_plan_create() has already refined
+             * that rect down to the pixels that actually changed. Copying the
+             * entire layer here would mean moving several megabytes per frame
+             * no matter how little of the screen was touched (a 1600x900
+             * display costs 5.8 MB per frame, even while merely typing). */
 
-            for (int y = 0; y < current->pending_frame.height; y++) {
-                memcpy(last_frame, pending_frame, row_length);
-                last_frame += current->last_frame.buffer_stride;
-                pending_frame += current->pending_frame.buffer_stride;
+            guac_rect bounds;
+            guac_rect_init(&bounds, 0, 0, current->pending_frame.width,
+                    current->pending_frame.height);
+
+            guac_rect dirty = current->pending_frame.dirty;
+            guac_rect_constrain(&dirty, &bounds);
+
+            if (!guac_rect_is_empty(&dirty)) {
+
+                unsigned char* pending_frame = GUAC_DISPLAY_LAYER_STATE_MUTABLE_BUFFER(current->pending_frame, dirty);
+                unsigned char* last_frame = GUAC_DISPLAY_LAYER_STATE_MUTABLE_BUFFER(current->last_frame, dirty);
+                size_t row_length = guac_mem_ckd_mul_or_die(guac_rect_width(&dirty), 4);
+
+                for (int y = dirty.top; y < dirty.bottom; y++) {
+                    memcpy(last_frame, pending_frame, row_length);
+                    last_frame += current->last_frame.buffer_stride;
+                    pending_frame += current->pending_frame.buffer_stride;
+                }
+
             }
 
             current->last_frame.dirty = current->pending_frame.dirty;
