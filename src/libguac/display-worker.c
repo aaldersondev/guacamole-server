@@ -214,8 +214,11 @@ static int LFR_guac_display_layer_png_optimality(guac_display_layer* layer,
 }
 
 /**
- * Returns whether the given rectangle would be optimally encoded as JPEG
- * rather than PNG.
+ * Returns whether the given rectangle is a candidate for JPEG encoding, based
+ * on everything except the contents of the image itself. Whether the contents
+ * actually favour a lossy encoding is determined separately, by
+ * LFR_guac_display_layer_png_optimality(), so that a single such estimate can
+ * be shared between the JPEG and WebP checks.
  *
  * @param layer
  *     The layer to be queried.
@@ -228,7 +231,7 @@ static int LFR_guac_display_layer_png_optimality(guac_display_layer* layer,
  *     been being updated within the given layer, in frames per second.
  *
  * @return
- *     Non-zero if the rectangle would be optimally encoded as JPEG, zero
+ *     Non-zero if the rectangle is a candidate for JPEG encoding, zero
  *     otherwise.
  */
 static int LFR_guac_display_layer_should_use_jpeg(guac_display_layer* layer,
@@ -244,17 +247,18 @@ static int LFR_guac_display_layer_should_use_jpeg(guac_display_layer* layer,
 
     /* JPEG is preferred if:
      * - frame rate is high enough
-     * - image size is large enough
-     * - PNG is not more optimal based on image contents */
+     * - image size is large enough */
     return framerate >= GUAC_DISPLAY_JPEG_FRAMERATE
-        && rect_size > GUAC_DISPLAY_JPEG_MIN_BITMAP_SIZE
-        && LFR_guac_display_layer_png_optimality(layer, rect) < 0;
+        && rect_size > GUAC_DISPLAY_JPEG_MIN_BITMAP_SIZE;
 
 }
 
 /**
- * Returns whether the given rectangle would be optimally encoded as WebP
- * rather than PNG.
+ * Returns whether the given rectangle is a candidate for WebP encoding, based
+ * on everything except the contents of the image itself. Whether the contents
+ * actually favour a lossy encoding is determined separately, by
+ * LFR_guac_display_layer_png_optimality(), so that a single such estimate can
+ * be shared between the JPEG and WebP checks.
  *
  * @param layer
  *     The layer to be queried.
@@ -267,7 +271,7 @@ static int LFR_guac_display_layer_should_use_jpeg(guac_display_layer* layer,
  *     been being updated within the given layer, in frames per second.
  *
  * @return
- *     Non-zero if the rectangle would be optimally encoded as WebP, zero
+ *     Non-zero if the rectangle is a candidate for WebP encoding, zero
  *     otherwise.
  */
 static int LFR_guac_display_layer_should_use_webp(guac_display_layer* layer,
@@ -277,11 +281,8 @@ static int LFR_guac_display_layer_should_use_webp(guac_display_layer* layer,
     if (!guac_client_supports_webp(layer->display->client))
         return 0;
 
-    /* WebP is preferred if:
-     * - frame rate is high enough
-     * - PNG is not more optimal based on image contents */
-    return framerate >= GUAC_DISPLAY_JPEG_FRAMERATE
-        && LFR_guac_display_layer_png_optimality(layer, rect) < 0;
+    /* WebP is preferred if the frame rate is high enough */
+    return framerate >= GUAC_DISPLAY_JPEG_FRAMERATE;
 
 }
 
@@ -345,15 +346,27 @@ void* guac_display_worker_thread(void* data) {
                  * with alpha transparency */
                 guac_display_layer_clear_non_opaque(display_layer, dirty);
 
+                int webp_candidate = LFR_guac_display_layer_should_use_webp(display_layer, dirty, framerate);
+                int jpeg_candidate = display_layer->opaque
+                        && LFR_guac_display_layer_should_use_jpeg(display_layer, dirty, framerate);
+
+                /* Both candidate formats are chosen over PNG on the strength
+                 * of the same estimate of how well this region would compress
+                 * losslessly. That estimate reads every pixel of the region,
+                 * so make it at most once, and only when some lossy format is
+                 * actually in the running. */
+                int prefer_lossy = (webp_candidate || jpeg_candidate)
+                        && LFR_guac_display_layer_png_optimality(display_layer, dirty) < 0;
+
                 /* Prefer WebP when reasonable */
-                if (LFR_guac_display_layer_should_use_webp(display_layer, dirty, framerate))
+                if (webp_candidate && prefer_lossy)
                     guac_client_stream_webp(client, socket, GUAC_COMP_OVER, layer,
                             dirty->left, dirty->top, rect,
                             guac_display_suggest_quality(client),
                             display_layer->last_frame.lossless ? 1 : 0);
 
                 /* If not WebP, JPEG is the next best (lossy) choice */
-                else if (display_layer->opaque && LFR_guac_display_layer_should_use_jpeg(display_layer, dirty, framerate))
+                else if (jpeg_candidate && prefer_lossy)
                     guac_client_stream_jpeg(client, socket, GUAC_COMP_OVER, layer,
                             dirty->left, dirty->top, rect,
                             guac_display_suggest_quality(client));
