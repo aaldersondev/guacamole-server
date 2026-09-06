@@ -128,13 +128,13 @@ of 200 frames.
 | Scenario | What it simulates | Wall/frame | | CPU/frame | |
 |---|---|---:|---:|---:|---:|
 | | | 1.6.0 | fork | 1.6.0 | fork |
-| `typing` | a caret-sized region changing | 1.114 ms | **0.292 ms** | 1.113 ms | **0.295 ms** |
-| `window` | a 600x400 window dragged | 7.407 ms | **5.214 ms** | 12.530 ms | **10.321 ms** |
-| `video` | a 640x360 video region | 6.426 ms | **4.176 ms** | 10.651 ms | **8.360 ms** |
-| `scroll` | full-screen text scrolling | 27.496 ms | **20.880 ms** | 41.598 ms | **34.880 ms** |
-| `fullscreen` | the whole desktop redrawn | 28.948 ms | **21.961 ms** | 46.751 ms | **39.687 ms** |
+| `typing` | a caret-sized region changing | 1.096 ms | **0.297 ms** | 1.093 ms | **0.295 ms** |
+| `window` | a 600x400 window dragged | 7.419 ms | **5.212 ms** | 12.544 ms | **10.302 ms** |
+| `video` | a 640x360 video region | 6.433 ms | **4.178 ms** | 10.654 ms | **8.343 ms** |
+| `scroll` | full-screen text scrolling | 27.732 ms | **20.895 ms** | 41.817 ms | **34.823 ms** |
+| `fullscreen` | the whole desktop redrawn | 29.000 ms | **21.951 ms** | 46.809 ms | **39.608 ms** |
 
-That is **3.8x** on light interactive use, around **1.5x** on ordinary window
+That is **3.7x** on light interactive use, around **1.5x** on ordinary window
 activity, and **1.3x** when the entire screen is churning. The gain is largest
 exactly where a remote session spends most of its time — small, frequent
 updates — because that is where the fixed per-frame cost dominated.
@@ -164,17 +164,40 @@ otherwise legitimately encode differently.
 Comparing the two builds this way over three runs each (after normalizing the
 wall-clock timestamp carried by `sync`):
 
-- `scroll`, `window` and `fullscreen` are fully deterministic in both builds,
-  and their output is **byte-for-byte identical**. Between them they exercise
-  the copy search, the cell hashing, the pixel comparison and the format choice
-  across the entire screen on every frame.
-- `typing` and `video` are not deterministic in *upstream* either: repeated runs
-  of unmodified 1.6.0 produce different streams, because the encoder choice
-  depends on wall-clock timing that `--pace` only partly constrains. For
-  `typing`, every output this fork produced is one unmodified 1.6.0 also
-  produced; for `video`, neither build repeats itself.
+- `typing`, `scroll`, `window` and `fullscreen` are fully deterministic in both
+  builds, and their output is **byte-for-byte identical**. Between them they
+  exercise the copy search, the cell hashing, the pixel comparison and the
+  format choice across the entire screen on every frame.
+- `video` is not deterministic in *upstream* either: repeated runs of unmodified
+  1.6.0 produce different streams, because the encoder choice depends on
+  wall-clock timing that `--pace` only partly constrains. Neither build repeats
+  itself on that one.
 
 `make check` passes: 86 tests, 0 failures.
+
+## Relationship to upstream
+
+The base is the **1.6.0 release tag**, not `apache/main`. GitHub will report
+this branch as being some hundreds of commits behind `apache/guacamole-server:main`;
+that is expected, and *Sync fork* is the wrong button — it would merge upstream's
+development branch into this one, which is neither what the published image is
+built from nor what the measurements above describe.
+
+Upstream has since fixed four defects in the very files this fork touches, and
+those fixes are cherry-picked in rather than left out:
+
+| | |
+|---|---|
+| GUACAMOLE-2234 | race condition clearing non-opaque layers across worker threads |
+| GUACAMOLE-2241 | potential infinite loop in `guac_display_plan_create()` |
+| GUACAMOLE-2118 | potential infinite loop in `guac_display_frame_complete()` |
+| GUACAMOLE-2118 | destruction of removed layers while operations still reference them |
+
+Both infinite loops are the same shape: a `continue` that skips a layer whose
+buffer has been set to NULL without advancing to the next one.
+
+When 1.6.1 is released, the way forward is to rebase these nine commits onto
+that tag rather than to merge anything.
 
 ## Building and benchmarking
 
