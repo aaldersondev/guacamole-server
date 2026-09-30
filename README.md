@@ -1,7 +1,7 @@
 # guacamole-server, with a faster display pipeline
 
 This is a fork of [apache/guacamole-server](https://github.com/apache/guacamole-server)
-1.6.0 that reduces the CPU cost of `guacd`'s frame encoding pipeline.
+1.6.1 that reduces the CPU cost of `guacd`'s frame encoding pipeline.
 
 Nothing about the protocol, the configuration, or the client changes. The same
 `guacd` binary serves the same connections and emits the same Guacamole
@@ -40,7 +40,7 @@ bash install.sh --new ~/guacamole
 
 ```yaml
   guacd:
-    image: ghcr.io/aaldersondev/guacd:1.6.0-fast    # was guacamole/guacd:1.6.0
+    image: ghcr.io/aaldersondev/guacd:1.6.1-fast    # was guacamole/guacd:1.6.0
 ```
 
 Then `docker compose up -d guacd`. Configuration, connections and the web
@@ -48,8 +48,11 @@ application are unaffected: this replaces guacd and nothing else, and going
 back is the same line in reverse.
 
 The image is `linux/amd64`. On another architecture, build it yourself with
-`docker build -t ghcr.io/aaldersondev/guacd:1.6.0-fast .` and the script will
+`docker build -t ghcr.io/aaldersondev/guacd:1.6.1-fast .` and the script will
 use what it finds locally.
+
+The earlier build on top of 1.6.0 is still published, unchanged, as
+`ghcr.io/aaldersondev/guacd:1.6.0-fast`.
 
 ## Why
 
@@ -120,24 +123,27 @@ together in row order, which leaves the resulting value unchanged.
 ## Results
 
 Measured with [`bench/guacbench`](bench/) on an Intel i5-7500T (4 cores), a
-1600x900 layer, and a screenshot of a real desktop as source imagery — two
-overlapping terminals full of dense monospace text over an editor window, which
-is what a remote session actually carries. Each figure is the best of six runs
-of 200 frames.
+1600x900 layer, and a screenshot of a real desktop as source imagery — an
+editor window full of source code, which is what a remote session actually
+carries. Each figure is the best of two runs of 200 frames; the runs agreed to
+within 1 %.
 
 | Scenario | What it simulates | Wall/frame | | CPU/frame | |
 |---|---|---:|---:|---:|---:|
-| | | 1.6.0 | fork | 1.6.0 | fork |
-| `typing` | a caret-sized region changing | 1.096 ms | **0.297 ms** | 1.093 ms | **0.295 ms** |
-| `window` | a 600x400 window dragged | 7.419 ms | **5.212 ms** | 12.544 ms | **10.302 ms** |
-| `video` | a 640x360 video region | 6.433 ms | **4.178 ms** | 10.654 ms | **8.343 ms** |
-| `scroll` | full-screen text scrolling | 27.732 ms | **20.895 ms** | 41.817 ms | **34.823 ms** |
-| `fullscreen` | the whole desktop redrawn | 29.000 ms | **21.951 ms** | 46.809 ms | **39.608 ms** |
+| | | 1.6.1 | fork | 1.6.1 | fork |
+| `typing` | a caret-sized region changing | 0.329 ms | **0.068 ms** | 0.324 ms | **0.068 ms** |
+| `window` | a 600x400 window dragged | 5.193 ms | **3.384 ms** | 7.063 ms | **5.198 ms** |
+| `video` | a 640x360 video region | 5.541 ms | **3.433 ms** | 7.591 ms | **5.414 ms** |
+| `scroll` | full-screen text scrolling | 22.586 ms | **17.087 ms** | 27.240 ms | **21.611 ms** |
+| `fullscreen` | the whole desktop redrawn | 23.025 ms | **17.855 ms** | 30.724 ms | **25.399 ms** |
 
-That is **3.7x** on light interactive use, around **1.5x** on ordinary window
-activity, and **1.3x** when the entire screen is churning. The gain is largest
-exactly where a remote session spends most of its time — small, frequent
-updates — because that is where the fixed per-frame cost dominated.
+That is **4.8x** less CPU on light interactive use, around **1.4x** on ordinary
+window activity, and **1.2x** when the entire screen is churning. The gain is
+largest exactly where a remote session spends most of its time — small,
+frequent updates — because that is where the fixed per-frame cost dominated.
+
+The same changes on top of 1.6.0, measured against a desktop of two terminals
+over an editor, gave 3.7x, 1.5x and 1.3x respectively.
 
 The source imagery matters, and not by a little. Run against a plain gradient
 wallpaper instead of a real desktop, the same code reports 5.1x on `typing` and
@@ -161,43 +167,40 @@ observe the same update frequency — the choice between PNG, JPEG and WebP
 depends on how often a region changes, so a build that is simply faster would
 otherwise legitimately encode differently.
 
-Comparing the two builds this way over three runs each (after normalizing the
-wall-clock timestamp carried by `sync`):
+Comparing the two builds this way (after normalizing the wall-clock timestamp
+carried by `sync`), unmodified 1.6.1 run twice against the fork run once:
 
-- `typing`, `scroll`, `window` and `fullscreen` are fully deterministic in both
-  builds, and their output is **byte-for-byte identical**. Between them they
+- `typing`, `scroll` and `fullscreen` are deterministic in upstream, and the
+  fork's output is **byte-for-byte identical** to it. Between them they
   exercise the copy search, the cell hashing, the pixel comparison and the
   format choice across the entire screen on every frame.
-- `video` is not deterministic in *upstream* either: repeated runs of unmodified
-  1.6.0 produce different streams, because the encoder choice depends on
-  wall-clock timing that `--pace` only partly constrains. Neither build repeats
-  itself on that one.
+- `window` and `video` are not deterministic in *upstream* either: two runs of
+  unmodified 1.6.1 produce different streams, because the encoder choice
+  depends on wall-clock timing that `--pace` only partly constrains. Which
+  scenarios fall on which side depends on the source image; on the 1.6.0 base,
+  with a different screenshot, `window` did repeat and was identical too.
 
-`make check` passes: 86 tests, 0 failures.
+`make check` passes: 98 tests, 0 failures.
 
 ## Relationship to upstream
 
-The base is the **1.6.0 release tag**, not `apache/main`. GitHub will report
-this branch as being some hundreds of commits behind `apache/guacamole-server:main`;
-that is expected, and *Sync fork* is the wrong button — it would merge upstream's
+The base is upstream's **`staging/1.6.1` branch** — the branch the 1.6.1
+release is being cut from, with its version already set to 1.6.1 — as of
+commit `d9ec4742`. It is not `apache/main`: GitHub will report this branch as
+being some hundreds of commits behind `apache/guacamole-server:main`, and that
+is expected. *Sync fork* is the wrong button — it would merge upstream's
 development branch into this one, which is neither what the published image is
 built from nor what the measurements above describe.
 
-Upstream has since fixed four defects in the very files this fork touches, and
-those fixes are cherry-picked in rather than left out:
+Moving from 1.6.0 to this base brings in the eighty-odd fixes upstream has made
+since, among them the four display-pipeline fixes that were previously
+cherry-picked here (GUACAMOLE-2234, 2241 and two for 2118), an ABBA deadlock
+between `guac_display_dup()` and the frame flush (GUACAMOLE-2270), an RDP
+busy-loop on transport failure (2221), zombie process accumulation (2143) and
+correct retrying on `EINTR` (2238).
 
-| | |
-|---|---|
-| GUACAMOLE-2234 | race condition clearing non-opaque layers across worker threads |
-| GUACAMOLE-2241 | potential infinite loop in `guac_display_plan_create()` |
-| GUACAMOLE-2118 | potential infinite loop in `guac_display_frame_complete()` |
-| GUACAMOLE-2118 | destruction of removed layers while operations still reference them |
-
-Both infinite loops are the same shape: a `continue` that skips a layer whose
-buffer has been set to NULL without advancing to the next one.
-
-When 1.6.1 is released, the way forward is to rebase these nine commits onto
-that tag rather than to merge anything.
+The fork's own commits sit on top of that base and are rebased, never merged.
+When 1.6.1 is tagged, they will be rebased onto the tag.
 
 ## Building and benchmarking
 
@@ -219,7 +222,7 @@ A `guacd` container image can be built as usual, and this is what the
 published image is built from:
 
 ```sh
-docker build -t guacd:1.6.0-fast .
+docker build -t guacd:1.6.1-fast .
 ```
 
 Note that this fork pins the versions of FreeRDP and libwebsockets that the
@@ -231,7 +234,7 @@ FreeRDP 2.x tag is a development snapshot that `configure` refuses.
 ## Licensing and attribution
 
 Apache License 2.0, unchanged from upstream. This fork modifies the following
-files relative to Apache Guacamole 1.6.0, and adds `bench/`, `install.sh`, a
+files relative to Apache Guacamole 1.6.1, and adds `bench/`, `install.sh`, a
 publishing workflow and this README:
 
 ```

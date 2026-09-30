@@ -51,12 +51,12 @@ jobs:
         with:
           images: ghcr.io/${{ github.repository_owner }}/guacd
           tags: |
-            type=raw,value=1.6.0-fast
+            type=raw,value=1.6.1-fast
             type=raw,value=latest
-            type=sha,prefix=1.6.0-fast-,format=short
+            type=sha,prefix=1.6.1-fast-,format=short
           labels: |
             org.opencontainers.image.title=guacd (faster display pipeline)
-            org.opencontainers.image.description=Apache Guacamole 1.6.0 guacd with a reduced-CPU display pipeline
+            org.opencontainers.image.description=Apache Guacamole 1.6.1 guacd with a reduced-CPU display pipeline
 
       - name: Build and push
         uses: docker/build-push-action@v6

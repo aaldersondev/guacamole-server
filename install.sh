@@ -29,7 +29,7 @@ set -euo pipefail
 
 SCRIPT_URL="https://raw.githubusercontent.com/aaldersondev/guacamole-server/faster-display/install.sh"
 IMAGE_REPO="ghcr.io/aaldersondev/guacd"
-IMAGE_TAG="1.6.0-fast"
+IMAGE_TAG="1.6.1-fast"
 UPSTREAM_IMAGE="guacamole/guacd:1.6.0"
 GUACAMOLE_IMAGE="guacamole/guacamole:1.6.0"
 POSTGRES_IMAGE="postgres:16-alpine"
